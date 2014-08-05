@@ -1,13 +1,13 @@
-Summary:  An open-source mapreduce framework.
+# Disable debug packages - useless for this package
+%global debug_package %{nil}
+
+Summary:  An open-source mapreduce framework
 Name: disco
 Version: 0.5.3
 Release: 1%{?dist}
 License: BSD
-Group: System Environment/Daemon
 URL: http://www.discoproject.org
 Source0: disco.tar.gz
-BuildRoot: %{_tmppath}/disco-%{version}-root
-Vendor: Disco Authors
 
 %description
 Disco is a lightweight, open-source framework for distributed computing based
@@ -18,30 +18,27 @@ replicates your data, and schedules your jobs efficiently. Disco even includes
 the tools you need to index billions of data points and query them in
 real-time.
 
-%package master
-Summary: Disco Master
-Group: System Environment/Daemon
+%package -n erlang-%{name}
+Summary: Disco Erlang Files
 Requires: erlang
 Requires: python-%{name} == %{version}-%{release}
-Requires: %{name}-cli == %{version}-%{release}
 BuildRequires: erlang erlang-rebar git
+
+%description -n erlang-%{name}
+Contains the erlang files for disco
+
+%package master
+Summary: Disco Master
+Requires: erlang-%{name} == %{version}-%{release}
+Requires: python-%{name} == %{version}-%{release}
+Requires: %{name}-cli == %{version}-%{release}
+BuildRequires: systemd
 
 %description master
 This package contains the required files to run the disco master
 
-%package node
-Summary: Disco Node
-Group: System Environment/Daemon
-Requires: erlang
-Requires: python-%{name} == %{version}-%{release}
-BuildRequires: erlang erlang-rebar git
-
-%description node
-This package contains the required files to run the disco node
-
 %package -n python-%{name}
 Summary: Disco Python Libs
-Group: Development/Languages
 Requires: python2
 BuildRequires: python2-devel, python-setuptools
 
@@ -50,7 +47,6 @@ This package contains the disco python libraries for Python
 
 %package cli
 Summary: Disco CLI Utilities
-Group: Development/Tools
 Requires: python2
 Requires: python-%{name} = %{version}-%{release}
 
@@ -58,44 +54,90 @@ Requires: python-%{name} = %{version}-%{release}
 This package contains the disco command-line tools ddfs and disco
 
 %prep
-%setup -n disco
+%setup -q -n disco
 
 %build
-%{__make} fedpkg REBAR=rebar
+make fedpkg REBAR=rebar
 
 %install
-%{__make} install DESTDIR=$RPM_BUILD_ROOT REBAR=rebar
-%{__make} install-node DESTDIR=$RPM_BUILD_ROOT REBAR=rebar
 
 # Cleanup from Makefile doing auto python install
-rm -rf $RPM_BUILD_ROOT/%{_prefix}/lib/python*
+rm -rf %{buildroot}%{_prefix}/lib/python*
 
 # Explicitely do the python install ourselves
-cd lib
-DISCO_VERSION=%{version}  %{__python} setup.py install -O1 --root=$RPM_BUILD_ROOT
+pushd lib
+DISCO_VERSION=%{version}  %{__python2} setup.py install -O1 --root=%{buildroot}
+popd
 
-cd ../
-mkdir -p $RPM_BUILD_ROOT/%{_prefix}/bin
-cp bin/disco bin/ddfs $RPM_BUILD_ROOT/%{_prefix}/bin
+mkdir -p %{buildroot}%{_bindir}
+install -pm755 bin/disco %{buildroot}%{_bindir}/disco
+install -pm755 bin/ddfs %{buildroot}%{_bindir}/ddfs
 
-%clean
-[ "%{buildroot}" != "/" ] && %{__rm} -rf %{buildroot}
+mkdir -p %{buildroot}%{_libdir}/erlang/lib/disco-%{version}/master/{deps,ebin}
+
+%define _erl_build_base %{buildroot}%{_libdir}/erlang/lib/disco-%{version}
+
+# Do deps first
+for d in master/deps/*; do
+    base="$(basename "$d")"
+    install_base="%{_erl_build_base}/master/deps/$base/ebin"
+    install -m 0755 -d "$install_base"
+    for f in master/deps/$base/ebin/*; do
+        install -m 0644 $f $install_base/$(basename "$f")
+    done
+done
+
+# Install disco
+for f in master/ebin/*; do
+    install -m 0644 $f %{_erl_build_base}/master/ebin/$(basename "$f")
+done
+
+## Install headers - disabled
+#mkdir -p %{buildroot}%{_libdir}/erlang/lib/disco-%{version}/include/{disco,ddfs}
+#for hf in master/include/*; do
+#    install -m 0644 $hf %{_erl_build_base}/include/$(basename "$hf")
+#done
+
+#for ddfs_h in master/src/ddfs/*.hrl; do
+#    install -m 0644 $ddfs_h %{_erl_build_base}/include/ddfs/$(basename "$ddfs_h")
+#done
+
+#for disco_h in master/src/*.hrl; do
+#    install -m 0644 $disco_h %{_erl_build_base}/include/disco/$(basename "$disco_h")
+#done
+
+# Install WWW files
+install -m 0755 -d "%{buildroot}%{_datadir}/disco"
+cp -r master/www %{buildroot}%{_datadir}/disco
+
+# Install settings
+install -m 0755 -d "%{buildroot}%{_sysconfdir}/disco"
+pushd conf
+ABSTARGETLIB="%{_libdir}/erlang/lib/disco-%{version}" ABSTARGETSRV="unset" ABSTARGETDAT="%{_datadir}/disco" WWW="www" ./gen.settings.sh > settings.py
+install -m 0644 settings.py %{buildroot}%{_sysconfdir}/disco/settings.py.example
+popd
+
+# Install systemd file
+install -p -D -m 0644 contrib/systemd/disco.service %{buildroot}%{_unitdir}/%{name}.service
+
+# TODO: create a HOWTO configure once installed and put it in %{_datadir}/disco/docs
+
+%files -n erlang-%{name}
+%dir %{_libdir}/erlang/lib/disco-*
+%{_libdir}/erlang/lib/disco-*/master/ebin
+%{_libdir}/erlang/lib/disco-*/master/deps
+# Headers can be included, but they will probably not prove useful
+#%{_libdir}/erlang/lib/disco-*/include/
 
 %files master
 %defattr(-,root,root)
-%attr(0644,root,root) %config(noreplace) %{_sysconfdir}/disco/settings.py
-%dir /etc/disco
-%dir %{_prefix}/var/disco
-%dir %{_prefix}/lib/disco
-%dir %{_prefix}/share/disco
-%{_prefix}/lib/disco/*
-%{_prefix}/share/disco/*
-
-%files node
-%defattr(-,root,root)
-%dir %{_prefix}/var/disco
-%dir %{_prefix}/lib/disco
-%{_prefix}/lib/disco/*
+# Config file
+%dir %{_sysconfdir}/disco
+%attr(0644,root,root) %config(noreplace) %{_sysconfdir}/disco/settings.py.example
+# Systemd file
+%{_unitdir}/%{name}.service
+# WWW files for master
+%{_datadir}/disco/
 
 %files -n python-%{name}
 %defattr(-,root,root)
@@ -105,11 +147,16 @@ cp bin/disco bin/ddfs $RPM_BUILD_ROOT/%{_prefix}/bin
 
 %files cli
 %defattr(-,root,root)
-%attr(0755,root,root) %{_prefix}/bin/disco
-%attr(0755,root,root) %{_prefix}/bin/ddfs
+%{_bindir}/disco
+%{_bindir}/ddfs
 
 
 %changelog
+* Tue Aug 05 2014 Tait Clarridge <tait@clarridge.ca> - 0.5.3-1
+- More fixes for Fedora packaging guidelines
+- Removed erlang files from master/node package and made it erlang-disco for Erlang packaging
+- Removed disco-node and replaced with erlang-disco
+
 * Sat Aug 02 2014 Tait Clarridge <tait@clarridge.ca> - 0.5.3-1
 - Removing generic paths from the Makefile and general fixups for packaging guidelines
 
