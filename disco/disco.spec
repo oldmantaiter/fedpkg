@@ -20,6 +20,7 @@ real-time.
 
 %package -n erlang-%{name}
 Summary: Disco Erlang Files
+License: BSD
 Requires: erlang
 Requires: python-%{name} == %{version}-%{release}
 BuildRequires: erlang erlang-rebar git
@@ -29,9 +30,11 @@ Contains the erlang files for disco
 
 %package master
 Summary: Disco Master
+License: BSD
 Requires: erlang-%{name} == %{version}-%{release}
 Requires: python-%{name} == %{version}-%{release}
 Requires: %{name}-cli == %{version}-%{release}
+Requires: systemd
 BuildRequires: systemd
 
 %description master
@@ -39,6 +42,7 @@ This package contains the required files to run the disco master
 
 %package -n python-%{name}
 Summary: Disco Python Libs
+License: BSD
 Requires: python2
 BuildRequires: python2-devel, python-setuptools
 
@@ -47,8 +51,10 @@ This package contains the disco python libraries for Python
 
 %package cli
 Summary: Disco CLI Utilities
+License: BSD
 Requires: python2
 Requires: python-%{name} = %{version}-%{release}
+BuildRequires:  python-sphinx
 
 %description cli
 This package contains the disco command-line tools ddfs and disco
@@ -70,8 +76,8 @@ DISCO_VERSION=%{version}  %{__python2} setup.py install -O1 --root=%{buildroot}
 popd
 
 mkdir -p %{buildroot}%{_bindir}
-install -pm755 bin/disco %{buildroot}%{_bindir}/disco
-install -pm755 bin/ddfs %{buildroot}%{_bindir}/ddfs
+install -p -m 0755 bin/disco %{buildroot}%{_bindir}/disco
+install -p -m 0755 bin/ddfs %{buildroot}%{_bindir}/ddfs
 
 mkdir -p %{buildroot}%{_libdir}/erlang/lib/disco-%{version}/master/{deps,ebin}
 
@@ -81,44 +87,52 @@ mkdir -p %{buildroot}%{_libdir}/erlang/lib/disco-%{version}/master/{deps,ebin}
 for d in master/deps/*; do
     base="$(basename "$d")"
     install_base="%{_erl_build_base}/master/deps/$base/ebin"
-    install -m 0755 -d "$install_base"
+    #install -p -m 0755 -d "$install_base"
     for f in master/deps/$base/ebin/*; do
-        install -m 0644 $f $install_base/$(basename "$f")
+        install -p -D -m 0644 $f $install_base/$(basename "$f")
     done
 done
 
 # Install disco
 for f in master/ebin/*; do
-    install -m 0644 $f %{_erl_build_base}/master/ebin/$(basename "$f")
+    install -p -m 0644 $f %{_erl_build_base}/master/ebin/$(basename "$f")
 done
 
 ## Install headers - disabled
 #mkdir -p %{buildroot}%{_libdir}/erlang/lib/disco-%{version}/include/{disco,ddfs}
 #for hf in master/include/*; do
-#    install -m 0644 $hf %{_erl_build_base}/include/$(basename "$hf")
+#    install -p -m 0644 $hf %{_erl_build_base}/include/$(basename "$hf")
 #done
 
 #for ddfs_h in master/src/ddfs/*.hrl; do
-#    install -m 0644 $ddfs_h %{_erl_build_base}/include/ddfs/$(basename "$ddfs_h")
+#    install -p -m 0644 $ddfs_h %{_erl_build_base}/include/ddfs/$(basename "$ddfs_h")
 #done
 
 #for disco_h in master/src/*.hrl; do
-#    install -m 0644 $disco_h %{_erl_build_base}/include/disco/$(basename "$disco_h")
+#    install -p -m 0644 $disco_h %{_erl_build_base}/include/disco/$(basename "$disco_h")
 #done
 
 # Install WWW files
-install -m 0755 -d "%{buildroot}%{_datadir}/disco"
+install -p -m 0755 -d "%{buildroot}%{_datadir}/disco"
 cp -r master/www %{buildroot}%{_datadir}/disco
 
 # Install settings
-install -m 0755 -d "%{buildroot}%{_sysconfdir}/disco"
 pushd conf
 ABSTARGETLIB="%{_libdir}/erlang/lib/disco-%{version}" ABSTARGETSRV="unset" ABSTARGETDAT="%{_datadir}/disco" WWW="www" ./gen.settings.sh > settings.py
-install -m 0644 settings.py %{buildroot}%{_sysconfdir}/disco/settings.py.example
+install -p -D -m 0644 settings.py %{buildroot}%{_sysconfdir}/disco/settings.py.example
 popd
 
 # Install systemd file
 install -p -D -m 0644 contrib/systemd/disco.service %{buildroot}%{_unitdir}/%{name}.service
+
+# Install docs for ddfs and disco commands
+pushd doc
+SPHINXOPTS="-D version=%{version} -D release=%{version}" make man -e
+install -p -D -m 0644 .build/man/ddfs.1 %{buildroot}%{_mandir}/man1/ddfs.1
+gzip %{buildroot}%{_mandir}/man1/ddfs.1
+install -p -D -m 0644 .build/man/disco.1 %{buildroot}%{_mandir}/man1/disco.1
+gzip %{buildroot}%{_mandir}/man1/disco.1
+popd
 
 # TODO: create a HOWTO configure once installed and put it in %{_datadir}/disco/docs
 
@@ -147,6 +161,8 @@ install -p -D -m 0644 contrib/systemd/disco.service %{buildroot}%{_unitdir}/%{na
 
 %files cli
 %defattr(-,root,root)
+%{_mandir}/man1/disco.1.gz
+%{_mandir}/man1/ddfs.1.gz
 %{_bindir}/disco
 %{_bindir}/ddfs
 
@@ -156,6 +172,7 @@ install -p -D -m 0644 contrib/systemd/disco.service %{buildroot}%{_unitdir}/%{na
 - More fixes for Fedora packaging guidelines
 - Removed erlang files from master/node package and made it erlang-disco for Erlang packaging
 - Removed disco-node and replaced with erlang-disco
+- Added documentation for disco/ddfs commands
 
 * Sat Aug 02 2014 Tait Clarridge <tait@clarridge.ca> - 0.5.3-1
 - Removing generic paths from the Makefile and general fixups for packaging guidelines
