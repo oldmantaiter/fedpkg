@@ -139,11 +139,11 @@ popd
 %doc LICENSE
 %{python2_sitelib}/clx/
 %{python2_sitelib}/%{name}/
-# Fix some rpmlint errors - disco sets these as executable in the jobhome directory anyways
-%attr(755, root, root) %{python2_sitelib}/%{name}/worker/__init__.py
-%attr(755, root, root) %{python2_sitelib}/%{name}/worker/simple.py
-%attr(755, root, root) %{python2_sitelib}/%{name}/worker/classic/worker.py
-%attr(755, root, root) %{python2_sitelib}/%{name}/worker/pipeline/worker.py
+# Fixes rpmlint errors - disco sets these as executable in the jobhome directory anyways
+%attr(755,root,root) %{python2_sitelib}/%{name}/worker/__init__.py
+%attr(755,root,root) %{python2_sitelib}/%{name}/worker/simple.py
+%attr(755,root,root) %{python2_sitelib}/%{name}/worker/classic/worker.py
+%attr(755,root,root) %{python2_sitelib}/%{name}/worker/pipeline/worker.py
 %{python2_sitelib}/%{name}-*.egg-info
 
 %files cli
